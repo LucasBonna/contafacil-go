@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	_ "github.com/sakirsensoy/genv/dotenv/autoload"
 
 	"github.com/lucasbonna/contafacil_api/internal/app"
 	"github.com/lucasbonna/contafacil_api/internal/config"
@@ -19,9 +20,7 @@ import (
 )
 
 func main() {
-	config.LoadEnvs()
-
-	rabbit, err := rabbitmq.NewRabbitMQ(config.RabbitMQUrl)
+	rabbit, err := rabbitmq.NewRabbitMQ(config.Env.RabbitMQUrl)
 	if err != nil {
 		log.Fatalf("error connecting to RabbitMQ: %v", err)
 	}
@@ -29,10 +28,10 @@ func main() {
 	queueHelper := utils.NewQueueHelper(rabbit)
 
 	r2Client, err := r2.NewR2Client(
-		config.StorageAccessKeyId,
-		config.StorageAccessKeySecret,
-		config.StorageRegion,
-		config.StorageAccountId,
+		config.Env.StorageAccessKeyId,
+		config.Env.StorageAccessKeySecret,
+		config.Env.StorageRegion,
+		config.Env.StorageAccountId,
 	)
 	if err != nil {
 		log.Fatalf("error connecting to r2: %v", err)
@@ -41,7 +40,7 @@ func main() {
 	storageManager := storage.SetStorage(r2Client)
 
 	// Create db connection
-	dbConn, err := database.ConnectToDB(config.Db_url)
+	dbConn, err := database.ConnectToDB(config.Env.Db_url)
 	if err != nil {
 		log.Fatalf("error connecting to database: %v", err)
 	}
@@ -61,7 +60,7 @@ func main() {
 		RC:     restyClient,
 	}
 
-	tecnospeedService := services.NewTecnospeedService(restyClient, config.TSUsername, config.TSPassword, config.TSBaseUrl)
+	tecnospeedService := services.NewTecnospeedService(restyClient, config.Env.TSUsername, config.Env.TSPassword, config.Env.TSBaseUrl)
 
 	external_deps := &app.ExternalDependencies{
 		TecnospeedService: tecnospeedService,
@@ -91,6 +90,6 @@ func main() {
 	go worker.StartRetryWorker(rabbit)
 
 	// Iniciar servidor HTTP
-	server := server.NewServer(config.Db_url, rabbit, deps)
+	server := server.NewServer(config.Env.Db_url, rabbit, deps)
 	server.StartServer()
 }

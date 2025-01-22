@@ -1,0 +1,55 @@
+# Ignora os binários gerados
+/bin/
+/build/
+/out/
+
+# Ignora arquivos do Go que não precisam ser versionados
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Ignora diretórios do Go (gerados durante o build)
+/vendor/
+/tmp
+
+# Ignora arquivos de dependências baixadas do Go
+go.sum
+go.mod
+
+# Ignora arquivos temporários ou de configuração do editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Ignora arquivos específicos do Docker
+*.log
+*.pid
+*.db
+.docker/
+docker-compose.override.yml
+
+# Ignora o diretório do Docker
+.docker/
+.docker-compose/
+
+# Ignora arquivos de configuração de cache
+.cache/
+
+# Ignora arquivos de configuração específicos de IDEs
+*.iml
+*.sublime-workspace
+*.sublime-project
+
+# Ignora arquivos de configuração de dependências do Docker
+docker-compose.override.yml
+
+# Ignora arquivos de logs do sistema
+*.log
+
+# Variaveis Env
+.env

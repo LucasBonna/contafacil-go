@@ -1,0 +1,51 @@
+services:
+  api:
+    container_name: api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    platform: linux/amd64
+    environment:
+      - .env
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    volumes:
+      - .:/app
+    networks:
+      - contafacil_network
+
+  db:
+    container_name: db
+    image: postgres:latest
+    environment:
+      POSTGRES_DB: contafacil
+      POSTGRES_USER: docker
+      POSTGRES_PASSWORD: docker
+    volumes:
+      - cf-data-postgres:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - contafacil_network
+
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - contafacil_network
+
+volumes:
+  cf-data-postgres:
+  rabbitmq-data:
+
+networks:
+  contafacil_network:

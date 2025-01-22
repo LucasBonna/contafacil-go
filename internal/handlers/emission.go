@@ -132,8 +132,6 @@ func (eh *EmissionHandlers) HandlerListEmissions() gin.HandlerFunc {
 
 func (eh *EmissionHandlers) IssueGNREHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		user := utils.GetUser(c)
-
 		client := utils.GetClient(c)
 
 		file, err := c.FormFile("file")

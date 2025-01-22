@@ -2,7 +2,6 @@ package utils
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"

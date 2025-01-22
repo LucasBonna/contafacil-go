@@ -1,9 +1,6 @@
 package config
 
 import (
-	"log"
-	"os"
-
 	"github.com/sakirsensoy/genv"
 )
 

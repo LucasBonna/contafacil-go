@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/lucasbonna/contafacil_api/internal/app"
+	"github.com/lucasbonna/contafacil_api/internal/config"
 	"github.com/lucasbonna/contafacil_api/internal/middlewares"
 	"github.com/lucasbonna/contafacil_api/internal/rabbitmq"
 )
@@ -34,8 +35,7 @@ func (s *Server) StartServer() {
 
 	r.Use(gin.Recovery())
 
-	// expectedHost := config.FrontEndUrl
-	expectedHost := "localhost:8000"
+	expectedHost := config.Env.FrontEndUrl
 
 	r.Use(func(c *gin.Context) {
 		if c.Request.Host != expectedHost {

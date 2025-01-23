@@ -15,8 +15,6 @@ import (
 	"github.com/lucasbonna/contafacil_api/internal/services"
 	"github.com/lucasbonna/contafacil_api/internal/storage"
 	"github.com/lucasbonna/contafacil_api/internal/storage/r2"
-	"github.com/lucasbonna/contafacil_api/internal/utils"
-	"github.com/lucasbonna/contafacil_api/internal/worker"
 )
 
 func main() {
@@ -24,8 +22,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("error connecting to RabbitMQ: %v", err)
 	}
-
-	queueHelper := utils.NewQueueHelper(rabbit)
 
 	r2Client, err := r2.NewR2Client(
 		config.Env.StorageAccessKeyId,
@@ -55,7 +51,6 @@ func main() {
 	core_deps := &app.CoreDependencies{
 		DB:     queries,
 		Rabbit: rabbit,
-		QH:     queueHelper,
 		SM:     storageManager,
 		RC:     restyClient,
 	}
@@ -77,17 +72,6 @@ func main() {
 		External: *external_deps,
 		Internal: *internal_deps,
 	}
-
-	// Criar dispatcher e iniciar handlers
-	dispatcher := worker.NewDispatcher()
-	dispatcher.RegisterHandler("IssueGNRE", &worker.IssueGNREHandler{})
-	log.Println("dispatchers registrados")
-
-	// Iniciar workers
-	go worker.StartWorkers(rabbit, dispatcher)
-
-	// Inicar worker de retries
-	go worker.StartRetryWorker(rabbit)
 
 	// Iniciar servidor HTTP
 	server := server.NewServer(config.Env.Db_url, rabbit, deps)

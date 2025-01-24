@@ -2,14 +2,19 @@ package main
 
 import (
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/hibiken/asynq"
 	_ "github.com/sakirsensoy/genv/dotenv/autoload"
 
 	"github.com/lucasbonna/contafacil_api/internal/app"
 	"github.com/lucasbonna/contafacil_api/internal/config"
 	"github.com/lucasbonna/contafacil_api/internal/database"
+	"github.com/lucasbonna/contafacil_api/internal/queue"
 	"github.com/lucasbonna/contafacil_api/internal/rabbitmq"
 	"github.com/lucasbonna/contafacil_api/internal/server"
 	"github.com/lucasbonna/contafacil_api/internal/services"
@@ -18,6 +23,10 @@ import (
 )
 
 func main() {
+	config.InitEnvs()
+
+	log.Println("teste", config.Env.RabbitMQUrl)
+
 	rabbit, err := rabbitmq.NewRabbitMQ(config.Env.RabbitMQUrl)
 	if err != nil {
 		log.Fatalf("error connecting to RabbitMQ: %v", err)
@@ -48,8 +57,13 @@ func main() {
 	restyClient := resty.New()
 	restyClient.SetTimeout(60 * time.Second)
 
+	// Create Asynq Client
+	asynqClient := asynq.NewClient(asynq.RedisClientOpt{Addr: config.Env.RedisAddr})
+	defer asynqClient.Close()
+
 	core_deps := &app.CoreDependencies{
 		DB:     queries,
+		AQ:     asynqClient,
 		Rabbit: rabbit,
 		SM:     storageManager,
 		RC:     restyClient,
@@ -73,7 +87,42 @@ func main() {
 		Internal: *internal_deps,
 	}
 
-	// Iniciar servidor HTTP
-	server := server.NewServer(config.Env.Db_url, rabbit, deps)
-	server.StartServer()
+	// Configurar o servidor Asynq
+	srv := asynq.NewServer(
+		asynq.RedisClientOpt{Addr: config.Env.RedisAddr},
+		asynq.Config{
+			Concurrency: 10, // Número de workers
+			Queues: map[string]int{
+				"default":  1,
+				"critical": 2,
+			},
+		},
+	)
+
+	mux := asynq.NewServeMux()
+	mux.HandleFunc(queue.TypeIssueGNRE, queue.HandleIssueGNRETask)
+
+	go func() {
+		if err := srv.Run(mux); err != nil {
+			log.Fatalf("could not run Asynq server: %v", err)
+		}
+	}()
+	log.Println("Asynq server initialized")
+
+	go func() {
+		server := server.NewServer(config.Env.Db_url, rabbit, deps)
+		server.StartServer()
+	}()
+	log.Println("Gin server iniciado")
+
+	// Esperar por sinais de interrupção para shutdown graceful
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-sigChan
+	log.Printf("Recebido sinal %s, iniciando shutdown", sig)
+
+	// Shutdown do Asynq
+	srv.Shutdown()
+
+	log.Println("Shutdown completo")
 }

@@ -1,6 +1,8 @@
 package config
 
 import (
+	"log"
+
 	"github.com/sakirsensoy/genv"
 )
 
@@ -18,6 +20,7 @@ type envs struct {
 	TSPassword             string
 	TSBaseUrl              string
 	FrontEndUrl            string
+	RedisAddr              string
 }
 
 var Env = &envs{
@@ -34,4 +37,9 @@ var Env = &envs{
 	TSPassword:             genv.Key("TS_PASSWORD").String(),
 	TSBaseUrl:              genv.Key("TS_BASE_URL").String(),
 	FrontEndUrl:            genv.Key("FRONTEND_URL").Default("http://localhost:3000").String(),
+	RedisAddr:              genv.Key("REDIS_ADDR").String(),
+}
+
+func InitEnvs() {
+	log.Println("Initializing Environment Variables")
 }

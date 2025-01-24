@@ -9,10 +9,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/lucasbonna/contafacil_api/internal/app"
 	"github.com/lucasbonna/contafacil_api/internal/database"
+	"github.com/lucasbonna/contafacil_api/internal/queue"
 	"github.com/lucasbonna/contafacil_api/internal/utils"
 )
 
@@ -132,7 +134,7 @@ func (eh *EmissionHandlers) HandlerListEmissions() gin.HandlerFunc {
 
 func (eh *EmissionHandlers) IssueGNREHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		client := utils.GetClient(c)
+		clientDetails := utils.GetClientDetails(c)
 
 		file, err := c.FormFile("file")
 		if err != nil {
@@ -167,15 +169,25 @@ func (eh *EmissionHandlers) IssueGNREHandler() gin.HandlerFunc {
 			return
 		}
 
-		tecnospeedResponse, err := eh.ext.TecnospeedService.IssueGNRE(validateResp.ProcessedXML, "ContaFacil", client.Cnpj)
+		task, err := queue.NewIssueGNRETask(validateResp.ProcessedXML, clientDetails)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "error issuing gnre",
+				"error": err,
 			})
 			return
 		}
 
+		info, err := eh.core.AQ.Enqueue(task, asynq.Queue("IssueGNREQueue"))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err,
+			})
+			return
+		}
+		log.Printf("enqueued task: id=%s queue=%s", info.ID, info.Queue)
+
 		c.JSON(http.StatusOK, gin.H{
+			"info":         info,
 			"validateResp": validateResp,
 		})
 	}

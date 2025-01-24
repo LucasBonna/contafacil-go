@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/lucasbonna/contafacil_api/internal/app"
-	"github.com/lucasbonna/contafacil_api/internal/database"
+	"github.com/lucasbonna/contafacil_api/internal/schemas"
 )
 
 func Authenticate(deps *app.Dependencies) gin.HandlerFunc {
@@ -50,28 +50,29 @@ func Authenticate(deps *app.Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		user := database.User{
-			ID:        queryResp.UserID,
-			Username:  queryResp.Username,
-			Role:      queryResp.UserRole,
-			ClientID:  queryResp.ClientID,
-			CreatedAt: queryResp.UserCreatedAt,
-			UpdatedAt: queryResp.UserUpdatedAt,
-			DeletedAt: queryResp.UserDeletedAt,
+		clientDetails := schemas.ClientDetails{
+			User: schemas.User{
+				ID:        queryResp.UserID,
+				Username:  queryResp.Username,
+				ApiKey:    queryResp.ApiKey,
+				Role:      queryResp.UserRole,
+				ClientID:  queryResp.ClientID,
+				CreatedAt: queryResp.UserCreatedAt,
+				UpdatedAt: queryResp.UserUpdatedAt,
+				DeletedAt: queryResp.UserDeletedAt,
+			},
+			Client: schemas.Client{
+				ID:        queryResp.ClientID,
+				Name:      queryResp.ClientName,
+				Cnpj:      queryResp.ClientCnpj,
+				Role:      queryResp.ClientRole,
+				CreatedAt: queryResp.ClientCreatedAt,
+				UpdatedAt: queryResp.ClientUpdatedAt,
+				DeletedAt: queryResp.ClientDeletedAt,
+			},
 		}
 
-		client := database.Client{
-			ID:        queryResp.ClientID,
-			Name:      queryResp.ClientName,
-			Cnpj:      queryResp.ClientCnpj,
-			Role:      queryResp.ClientRole,
-			CreatedAt: queryResp.ClientCreatedAt,
-			UpdatedAt: queryResp.ClientUpdatedAt,
-			DeletedAt: queryResp.ClientDeletedAt,
-		}
-
-		c.Set("user", &user)
-		c.Set("client", &client)
+		c.Set("clientDetails", &clientDetails)
 
 		c.Next()
 	}

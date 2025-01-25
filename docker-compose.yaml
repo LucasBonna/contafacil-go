@@ -5,8 +5,9 @@ services:
       context: .
       dockerfile: Dockerfile
     platform: linux/amd64
+    env_file: .env
     environment:
-      - .env
+      - TYPE=api
     ports:
       - "8000:8000"
     restart: unless-stopped
@@ -14,6 +15,37 @@ services:
       - .:/app
     networks:
       - contafacil_network
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    platform: linux/amd64
+    env_file: .env
+    environment:
+      - TYPE=worker
+    deploy:
+      replicas: 1
+    restart: unless-stopped
+    volumes:
+      - .:/app
+    networks:
+      - contafacil_network
+
+  asynqmon:
+    container_name: asynqmon
+    image: hibiken/asynqmon:latest
+    platform: linux/amd64
+    ports:
+      - "8080:8080"  # Porta para acesso à UI
+    environment:
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: sua_senha
+      BASIC_AUTH_USER: admin
+      ASIC_AUTH_PASS: secret
+    networks:
+      - contafacil_network
+    restart: unless-stopped
 
   db:
     container_name: db
@@ -29,23 +61,20 @@ services:
     networks:
       - contafacil_network
 
-  rabbitmq:
-    container_name: rabbitmq
-    image: rabbitmq:3-management
-    environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
-    volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
+  redis:
+    container_name: redis
+    image: redis:latest
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
     networks:
       - contafacil_network
+    restart: unless-stopped
 
 volumes:
   cf-data-postgres:
-  rabbitmq-data:
+  redis-data:
 
 networks:
   contafacil_network:

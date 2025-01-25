@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"io"
 	"log"
 	"net/http"
@@ -169,7 +170,50 @@ func (eh *EmissionHandlers) IssueGNREHandler() gin.HandlerFunc {
 			return
 		}
 
-		task, err := queue.NewIssueGNRETask(validateResp.ProcessedXML, clientDetails)
+		fileId := uuid.New()
+		err = eh.core.SM.Upload(f, fileId)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		log.Println("fileID", pgtype.UUID{Bytes: fileId, Valid: true})
+		log.Println("icms", validateResp.IcmsValue)
+		log.Println("chave", validateResp.ChaveNota)
+		log.Println("numNota", validateResp.NumNota)
+		log.Println("destinatario", validateResp.Destinatario)
+		log.Println("userId", clientDetails.User.ID)
+		log.Println("clientId", clientDetails.Client.ID)
+
+		createdEmission, err := eh.core.DB.CreateGNREEmission(context.Background(), database.CreateGNREEmissionParams{
+			XmlFileID:    pgtype.UUID{Bytes: fileId, Valid: true},
+			EmissionType: pgtype.Text{String: "GNRE", Valid: true},
+			GuiaAmount:   validateResp.IcmsValue,
+			ChaveNota:    validateResp.ChaveNota,
+			NumNota:      validateResp.NumNota,
+			Destinatario: validateResp.Destinatario,
+			ClientID:     clientDetails.Client.ID,
+			Message:      pgtype.Text{String: "Processando GNRE", Valid: true},
+			Status:       pgtype.Text{String: "PROCESSING", Valid: true},
+			UserID:       clientDetails.User.ID,
+		})
+		if err != nil {
+			// ignore error for now and get emission some other way
+		}
+		emission, err := eh.core.DB.GetGNREEmissionById(context.Background(), createdEmission.ID)
+
+		parsedUUId, _ := uuid.FromBytes(emission.ID.Bytes[:])
+
+		log.Println("parsedUUID", parsedUUId)
+
+		taskPayload := queue.IssueGNRETaskPayload{
+			EmissionId:    parsedUUId,
+			XmlContent:    validateResp.ProcessedXML,
+			ClientDetails: clientDetails,
+		}
+
+		task, err := queue.NewTask(string(queue.TypeIssueGNRE), taskPayload)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": err,
@@ -177,7 +221,7 @@ func (eh *EmissionHandlers) IssueGNREHandler() gin.HandlerFunc {
 			return
 		}
 
-		info, err := eh.core.AQ.Enqueue(task, asynq.Queue("IssueGNREQueue"))
+		info, err := eh.core.AQ.Enqueue(task, asynq.Queue("IssueGNREQueue"), asynq.Retention(48*time.Hour))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": err,
@@ -186,9 +230,6 @@ func (eh *EmissionHandlers) IssueGNREHandler() gin.HandlerFunc {
 		}
 		log.Printf("enqueued task: id=%s queue=%s", info.ID, info.Queue)
 
-		c.JSON(http.StatusOK, gin.H{
-			"info":         info,
-			"validateResp": validateResp,
-		})
+		c.JSON(http.StatusOK, emission)
 	}
 }

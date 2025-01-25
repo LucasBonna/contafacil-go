@@ -10,7 +10,7 @@ goose-create:
 	@if [ -z "$(name)" ]; then echo "Error: Please specify a name for the migration. Usage: make goose-create name=migration_name"; exit 1; fi
 	@GOOSE_DRIVER=postgres GOOSE_DBSTRING=$(dsn) goose -dir=$(migrationPath) create $(name) sql
 
-all-up:
+all:
 	@docker-compose up -d
 	sleep 5
 	@GOOSE_DRIVER=postgres GOOSE_DBSTRING=$(dsn) goose -dir=$(migrationPath) up
@@ -21,4 +21,4 @@ down:
 
 rs:
 	@make down
-	@make all-up
+	@make all

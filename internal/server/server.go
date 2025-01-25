@@ -10,14 +10,13 @@ import (
 	"github.com/lucasbonna/contafacil_api/internal/app"
 	"github.com/lucasbonna/contafacil_api/internal/config"
 	"github.com/lucasbonna/contafacil_api/internal/middlewares"
-	"github.com/lucasbonna/contafacil_api/internal/rabbitmq"
 )
 
 type Server struct {
 	deps *app.Dependencies
 }
 
-func NewServer(dbConnStr string, rabbit *rabbitmq.RabbitMQ, deps *app.Dependencies) *Server {
+func NewServer(dbConnStr string, deps *app.Dependencies) *Server {
 	return &Server{
 		deps: deps,
 	}

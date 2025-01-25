@@ -67,7 +67,7 @@ CREATE TABLE gnre_emissions (
     xml UUID NOT NULL,
     pdf UUID,
     comprovante_pdf UUID,
-    guia_amount NUMERIC(15, 2) NOT NULL,
+    guia_amount double precision NOT NULL,
     numero_recibo VARCHAR(255),
     chave_nota VARCHAR(255) NOT NULL,
     cod_barras_guia VARCHAR(255),

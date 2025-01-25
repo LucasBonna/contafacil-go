@@ -63,7 +63,7 @@ type GnreEmission struct {
 	Xml            pgtype.UUID
 	Pdf            pgtype.UUID
 	ComprovantePdf pgtype.UUID
-	GuiaAmount     pgtype.Numeric
+	GuiaAmount     float64
 	NumeroRecibo   pgtype.Text
 	ChaveNota      string
 	CodBarrasGuia  pgtype.Text

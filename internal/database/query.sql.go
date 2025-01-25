@@ -121,6 +121,113 @@ func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, e
 	return i, err
 }
 
+const createGNREEmission = `-- name: CreateGNREEmission :one
+WITH new_emission AS (
+    INSERT INTO emissions (
+                           id,
+                           emission_type,
+                           client_id,
+                           message,
+                           status,
+                           user_id
+        ) VALUES (
+                     gen_random_uuid(),
+                     $6::text,
+                     $7::uuid,
+                     COALESCE($8::text, ''),
+                     COALESCE($9::text, 'PENDING'),
+                     $10::uuid
+                 ) RETURNING id, created_at
+)
+INSERT INTO gnre_emissions (
+    id,
+    xml,
+    guia_amount,
+    chave_nota,
+    num_nota,
+    destinatario
+) SELECT
+      ne.id,
+      $1::uuid,
+      $2::double precision,
+      $3::varchar,
+      $4::varchar,
+      $5::varchar
+FROM new_emission ne
+RETURNING
+    id,
+    (SELECT emission_type FROM emissions WHERE id = gnre_emissions.id) AS emission_type,
+    (SELECT client_id FROM emissions WHERE id = gnre_emissions.id) AS client_id,
+    (SELECT COALESCE(message, '') FROM emissions WHERE id = gnre_emissions.id) AS message,
+    (SELECT COALESCE(status, 'PENDING') FROM emissions WHERE id = gnre_emissions.id) AS status,
+    (SELECT user_id FROM emissions WHERE id = gnre_emissions.id) AS user_id,
+    (SELECT created_at FROM emissions WHERE id = gnre_emissions.id) AS created_at,
+    xml AS xml_file_id,
+    guia_amount,
+    chave_nota,
+    num_nota,
+    destinatario
+`
+
+type CreateGNREEmissionParams struct {
+	XmlFileID    pgtype.UUID
+	GuiaAmount   float64
+	ChaveNota    string
+	NumNota      string
+	Destinatario string
+	EmissionType pgtype.Text
+	ClientID     pgtype.UUID
+	Message      pgtype.Text
+	Status       pgtype.Text
+	UserID       pgtype.UUID
+}
+
+type CreateGNREEmissionRow struct {
+	ID           pgtype.UUID
+	EmissionType string
+	ClientID     pgtype.UUID
+	Message      pgtype.Text
+	Status       string
+	UserID       pgtype.UUID
+	CreatedAt    pgtype.Timestamp
+	XmlFileID    pgtype.UUID
+	GuiaAmount   float64
+	ChaveNota    string
+	NumNota      string
+	Destinatario string
+}
+
+func (q *Queries) CreateGNREEmission(ctx context.Context, arg CreateGNREEmissionParams) (CreateGNREEmissionRow, error) {
+	row := q.db.QueryRow(ctx, createGNREEmission,
+		arg.XmlFileID,
+		arg.GuiaAmount,
+		arg.ChaveNota,
+		arg.NumNota,
+		arg.Destinatario,
+		arg.EmissionType,
+		arg.ClientID,
+		arg.Message,
+		arg.Status,
+		arg.UserID,
+	)
+	var i CreateGNREEmissionRow
+	err := row.Scan(
+		&i.ID,
+		&i.EmissionType,
+		&i.ClientID,
+		&i.Message,
+		&i.Status,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.XmlFileID,
+		&i.GuiaAmount,
+		&i.ChaveNota,
+		&i.NumNota,
+		&i.Destinatario,
+	)
+	return i, err
+}
+
 const getAllUsersByClientId = `-- name: GetAllUsersByClientId :many
 SELECT id, username, password, api_key, role, client_id, created_at, updated_at, deleted_at FROM users
 WHERE client_id = $1
@@ -284,6 +391,32 @@ type GetGNREEmissionByChaveNotaAndStatusParams struct {
 
 func (q *Queries) GetGNREEmissionByChaveNotaAndStatus(ctx context.Context, arg GetGNREEmissionByChaveNotaAndStatusParams) (GnreEmission, error) {
 	row := q.db.QueryRow(ctx, getGNREEmissionByChaveNotaAndStatus, arg.ChaveNota, arg.Status)
+	var i GnreEmission
+	err := row.Scan(
+		&i.ID,
+		&i.Xml,
+		&i.Pdf,
+		&i.ComprovantePdf,
+		&i.GuiaAmount,
+		&i.NumeroRecibo,
+		&i.ChaveNota,
+		&i.CodBarrasGuia,
+		&i.NumNota,
+		&i.Destinatario,
+	)
+	return i, err
+}
+
+const getGNREEmissionById = `-- name: GetGNREEmissionById :one
+SELECT g.id, g.xml, g.pdf, g.comprovante_pdf, g.guia_amount, g.numero_recibo, g.chave_nota, g.cod_barras_guia, g.num_nota, g.destinatario
+FROM gnre_emissions g
+JOIN emissions e ON g.id = e.id
+WHERE g.id = $1
+LIMIT 1
+`
+
+func (q *Queries) GetGNREEmissionById(ctx context.Context, id pgtype.UUID) (GnreEmission, error) {
+	row := q.db.QueryRow(ctx, getGNREEmissionById, id)
 	var i GnreEmission
 	err := row.Scan(
 		&i.ID,
@@ -481,6 +614,145 @@ func (q *Queries) UpdateAccessLog(ctx context.Context, arg UpdateAccessLogParams
 		&i.StatusCode,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateEmissionAndGNRE = `-- name: UpdateEmissionAndGNRE :one
+WITH check_exists AS (
+    SELECT e.id
+    FROM emissions e
+             JOIN gnre_emissions g ON e.id = g.id
+    WHERE e.id = $1
+    LIMIT 1
+),
+     update_emission AS (
+         UPDATE emissions
+             SET
+                 emission_type = COALESCE($2, emission_type),
+                 client_id = COALESCE($3, client_id),
+                 message = COALESCE($4, message),
+                 status = COALESCE($5, status),
+                 user_id = COALESCE($6, user_id),
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = (SELECT id FROM check_exists)
+             RETURNING id, emission_type, client_id, message, status, user_id, created_at, updated_at, deleted_at
+     ),
+     update_gnre AS (
+         UPDATE gnre_emissions
+             SET
+                 xml = COALESCE($7::uuid, xml),
+                 pdf = COALESCE($8::uuid, pdf),
+                 comprovante_pdf = COALESCE($9::uuid, comprovante_pdf),
+                 guia_amount = COALESCE($10::numeric, guia_amount),
+                 numero_recibo = COALESCE($11::varchar, numero_recibo),
+                 chave_nota = COALESCE($12::varchar, chave_nota),
+                 cod_barras_guia = COALESCE($13::varchar, cod_barras_guia),
+                 num_nota = COALESCE($14::varchar, num_nota),
+                 destinatario = COALESCE($15::varchar, destinatario)
+             WHERE id = (SELECT id FROM check_exists)
+             RETURNING id, xml, pdf, comprovante_pdf, guia_amount, numero_recibo, chave_nota, cod_barras_guia, num_nota, destinatario
+     )
+SELECT
+    e.id AS emission_id,
+    e.emission_type,
+    e.client_id,
+    e.message,
+    e.status,
+    e.user_id,
+    e.created_at AS emission_created_at,
+    e.updated_at AS emission_updated_at,
+    e.deleted_at AS emission_deleted_at,
+    g.xml AS gnre_xml,
+    g.pdf AS gnre_pdf,
+    g.comprovante_pdf AS gnre_comprovante_pdf,
+    g.guia_amount AS gnre_guia_amount,
+    g.numero_recibo AS gnre_numero_recibo,
+    g.chave_nota AS gnre_chave_nota,
+    g.cod_barras_guia AS gnre_cod_barras_guia,
+    g.num_nota AS gnre_num_nota,
+    g.destinatario AS gnre_destinatario
+FROM update_emission e
+         JOIN update_gnre g ON e.id = g.id
+`
+
+type UpdateEmissionAndGNREParams struct {
+	ID             pgtype.UUID
+	EmissionType   pgtype.Text
+	ClientID       pgtype.UUID
+	Message        pgtype.Text
+	Status         pgtype.Text
+	UserID         pgtype.UUID
+	Xml            pgtype.UUID
+	Pdf            pgtype.UUID
+	ComprovantePdf pgtype.UUID
+	GuiaAmount     pgtype.Numeric
+	NumeroRecibo   pgtype.Text
+	ChaveNota      pgtype.Text
+	CodBarrasGuia  pgtype.Text
+	NumNota        pgtype.Text
+	Destinatario   pgtype.Text
+}
+
+type UpdateEmissionAndGNRERow struct {
+	EmissionID         pgtype.UUID
+	EmissionType       string
+	ClientID           pgtype.UUID
+	Message            pgtype.Text
+	Status             pgtype.Text
+	UserID             pgtype.UUID
+	EmissionCreatedAt  pgtype.Timestamp
+	EmissionUpdatedAt  pgtype.Timestamp
+	EmissionDeletedAt  pgtype.Timestamp
+	GnreXml            pgtype.UUID
+	GnrePdf            pgtype.UUID
+	GnreComprovantePdf pgtype.UUID
+	GnreGuiaAmount     float64
+	GnreNumeroRecibo   pgtype.Text
+	GnreChaveNota      string
+	GnreCodBarrasGuia  pgtype.Text
+	GnreNumNota        string
+	GnreDestinatario   string
+}
+
+func (q *Queries) UpdateEmissionAndGNRE(ctx context.Context, arg UpdateEmissionAndGNREParams) (UpdateEmissionAndGNRERow, error) {
+	row := q.db.QueryRow(ctx, updateEmissionAndGNRE,
+		arg.ID,
+		arg.EmissionType,
+		arg.ClientID,
+		arg.Message,
+		arg.Status,
+		arg.UserID,
+		arg.Xml,
+		arg.Pdf,
+		arg.ComprovantePdf,
+		arg.GuiaAmount,
+		arg.NumeroRecibo,
+		arg.ChaveNota,
+		arg.CodBarrasGuia,
+		arg.NumNota,
+		arg.Destinatario,
+	)
+	var i UpdateEmissionAndGNRERow
+	err := row.Scan(
+		&i.EmissionID,
+		&i.EmissionType,
+		&i.ClientID,
+		&i.Message,
+		&i.Status,
+		&i.UserID,
+		&i.EmissionCreatedAt,
+		&i.EmissionUpdatedAt,
+		&i.EmissionDeletedAt,
+		&i.GnreXml,
+		&i.GnrePdf,
+		&i.GnreComprovantePdf,
+		&i.GnreGuiaAmount,
+		&i.GnreNumeroRecibo,
+		&i.GnreChaveNota,
+		&i.GnreCodBarrasGuia,
+		&i.GnreNumNota,
+		&i.GnreDestinatario,
 	)
 	return i, err
 }

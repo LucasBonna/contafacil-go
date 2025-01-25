@@ -47,7 +47,6 @@ func Logger(deps *app.Dependencies) gin.HandlerFunc {
 		requestQuery := c.Request.URL.RawQuery
 		requestParams := formatParams(c.Params)
 
-		log.Println("logfgfffffff")
 		logParams := database.CreateAccessLogParams{
 			ID:             pgtype.UUID{Bytes: uuid.New(), Valid: true},
 			Ip:             c.ClientIP(),

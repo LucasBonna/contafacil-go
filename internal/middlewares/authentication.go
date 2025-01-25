@@ -13,7 +13,11 @@ import (
 
 func Authenticate(deps *app.Dependencies) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if strings.HasPrefix(c.Request.URL.Path, "/swagger") || c.Request.URL.Path == "/docs" {
+		path := c.Request.URL.Path
+
+		if strings.HasPrefix(path, "/monitoring") ||
+			strings.HasPrefix(path, "/swagger") ||
+			strings.HasPrefix(path, "/docs") {
 			c.Next()
 			return
 		}

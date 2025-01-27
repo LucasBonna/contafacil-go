@@ -3,55 +3,27 @@ package database
 import (
 	"context"
 	"fmt"
-	"time"
+	"log"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/tracelog"
-	"github.com/rs/zerolog/log"
+	_ "github.com/lib/pq"
+
+	"github.com/lucasbonna/contafacil_api/ent"
 )
 
-func ConnectToDB(dsn string) (*pgx.Conn, error) {
-	// Parsear configuração
-	config, err := pgx.ParseConfig(dsn)
+func ConnectToDB(host string, port string, user string, dbname string, password string) *ent.Client {
+	log.Println(host)
+	log.Println(port)
+	log.Println(user)
+	log.Println(dbname)
+	log.Println(password)
+	client, err := ent.Open("postgres", fmt.Sprintf("host=%s port=%s user=%s dbname=%s password=%s sslmode=disable", host, port, user, dbname, password))
 	if err != nil {
-		return nil, fmt.Errorf("erro ao parsear DSN: %w", err)
+		log.Fatalf("failed opening connection to postgres: %v", err)
 	}
 
-	// Configurar logger customizado
-	config.Tracer = &tracelog.TraceLog{
-		Logger:   &QueryLogger{},
-		LogLevel: tracelog.LogLevelDebug, // Loga todas as queries
+	if err := client.Schema.Create(context.Background()); err != nil {
+		log.Fatalf("failed creating schema resources: %v", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Conectar com configuração
-	conn, err := pgx.ConnectConfig(ctx, config)
-	if err != nil {
-		return nil, fmt.Errorf("erro ao conectar ao banco: %w", err)
-	}
-
-	return conn, nil
-}
-
-type QueryLogger struct{}
-
-func (ql *QueryLogger) Log(
-	ctx context.Context,
-	level tracelog.LogLevel,
-	msg string,
-	data map[string]any,
-) {
-	if msg == "Query" {
-		query := data["sql"].(string)
-		args := data["args"].([]any)
-		duration := data["time"].(time.Duration)
-
-		log.Debug().
-			Str("query", query).
-			Interface("args", args).
-			Dur("duration", duration).
-			Msg("SQL Executado")
-	}
+	return client
 }

@@ -11,6 +11,7 @@ import (
 
 type Tecnospeed interface {
 	IssueGNRE(xmlContent string, group string, document string) (*schemas.IssueGNREResponse, error)
+	DownloadGNRE(group string, document string, chaveNota string, numRecibo string) ([]byte, error)
 }
 
 type tecnospeedService struct {
@@ -74,4 +75,25 @@ func (ts *tecnospeedService) IssueGNRE(xmlContent string, group string, document
 	}
 
 	return issueResponse, nil
+}
+
+func (ts *tecnospeedService) DownloadGNRE(group string, document string, chaveNota string, numRecibo string) ([]byte, error) {
+	var fileBytes []byte
+	endpoint := fmt.Sprintf("%s/gnre/imprime", ts.baseUrl)
+	_, err := ts.client.R().
+		SetBasicAuth(ts.username, ts.password).
+		SetQueryParams(map[string]string{
+			"Grupo":        group,
+			"CNPJ":         document,
+			"ChaveNota":    chaveNota,
+			"Url":          "0",
+			"NumeroRecibo": numRecibo,
+		}).
+		SetResult(fileBytes).
+		Post(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("error issuing gnre %s", err)
+	}
+
+	return fileBytes, nil
 }

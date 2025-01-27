@@ -16,7 +16,7 @@ type Server struct {
 	deps *app.Dependencies
 }
 
-func NewServer(dbConnStr string, deps *app.Dependencies) *Server {
+func NewServer(deps *app.Dependencies) *Server {
 	return &Server{
 		deps: deps,
 	}

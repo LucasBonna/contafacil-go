@@ -1,0 +1,8 @@
+h1:h/fnZExzXzlmgUchGcQx4AiUs8R9IbCov/x19b8tx4M=
+20250107234303_create_log_table.sql h1:GclEE9+5BRfwCoxPql8N0QE7YO11QH+gcyGx3I+aL9U=
+20250108051456_create_file_table.sql h1:tf8aXP49yi2bNVyeeV0qpM4YyqharWgWGn35+sC3Efo=
+20250108052142_create_emissions_tables.sql h1:8z8sJjYR3cmR/z209zaWlhLIcQxjsN4GT9BrwqzRjoE=
+20250108052429_create_clients_table.sql h1:4A1dImGBeYz9oQl904obXcU3bIQKXRC7a3aYehpVKMU=
+20250108052512_create_users_table.sql h1:mURoYINTCtmKCUa7az3+M4IBo0yVuSv8cwnDJYrJWfw=
+20250108052624_insert_default_client.sql h1:+w/T5Y6x7FxzvS9z8inUagV/YOOrVdchjCce1YMR2rs=
+20250125035254_alter_guia_amount_type.sql h1:bpY/Tth7lmpc0sOMyPC+nE8cvF47Vno8v8S6VdaGTmI=

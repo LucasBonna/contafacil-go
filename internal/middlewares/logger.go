@@ -12,10 +12,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/lucasbonna/contafacil_api/internal/app"
-	"github.com/lucasbonna/contafacil_api/internal/database"
 )
 
 type bodyLogWriter struct {
@@ -43,41 +41,32 @@ func Logger(deps *app.Dependencies) gin.HandlerFunc {
 
 		t := time.Now()
 
-		requestHeaders := formatHeaders(c.Request.Header)
-		requestQuery := c.Request.URL.RawQuery
-		requestParams := formatParams(c.Params)
-
-		log.Println("logfgfffffff")
-		logParams := database.CreateAccessLogParams{
-			ID:             pgtype.UUID{Bytes: uuid.New(), Valid: true},
-			Ip:             c.ClientIP(),
-			Method:         c.Request.Method,
-			Endpoint:       pgtype.Text{String: c.Request.URL.Path, Valid: true},
-			RequestHeaders: pgtype.Text{String: requestHeaders, Valid: requestHeaders != ""},
-			RequestParams:  pgtype.Text{String: requestParams, Valid: requestParams != ""},
-			RequestQuery:   pgtype.Text{String: requestQuery, Valid: requestQuery != ""},
-			CreatedAt:      pgtype.Timestamp{Time: time.Now(), Valid: true},
-			UpdatedAt:      pgtype.Timestamp{Time: time.Now(), Valid: true},
-		}
+		logParams := deps.Core.DB.AccessLog.Create().
+			SetID(uuid.New()).
+			SetIP(c.ClientIP()).
+			SetMethod(c.Request.Method).
+			SetEndpoint(c.Request.URL.Path).
+			SetRequestHeaders(formatHeaders(c.Request.Header)).
+			SetRequestParams(formatParams(c.Params)).
+			SetRequestQuery(c.Request.URL.RawQuery).
+			SetCreatedAt(time.Now()).
+			SetUpdatedAt(time.Now())
 
 		contentType := c.GetHeader("Content-Type")
 		if strings.HasPrefix(contentType, "multipart/form-data") {
-			fileUploadMsg := "Multipart form data (file upload)"
-			logParams.RequestBody = pgtype.Text{String: fileUploadMsg, Valid: fileUploadMsg != ""}
+			logParams.SetRequestBody("Multipart form data (file upload)")
 		} else if !isJsonContentType(contentType) {
 			nonJSONMsg := fmt.Sprintf("Non-JSON content type: %s", contentType)
-			logParams.RequestBody = pgtype.Text{String: nonJSONMsg, Valid: nonJSONMsg != ""}
-			logParams.RequestHeaders = pgtype.Text{String: nonJSONMsg, Valid: nonJSONMsg != ""}
-			logParams.ResponseHeaders = pgtype.Text{String: nonJSONMsg, Valid: nonJSONMsg != ""}
-			logParams.ResponseBody = pgtype.Text{String: nonJSONMsg, Valid: nonJSONMsg != ""}
+			logParams.SetRequestBody(nonJSONMsg)
 		} else {
 			bodyBytes, _ := io.ReadAll(c.Request.Body)
 			c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			logParams.SetRequestBody(string(bodyBytes))
 		}
 
-		insertedLog, err := deps.Core.DB.CreateAccessLog(ctx, logParams)
+		insertedLog, err := logParams.Save(ctx)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error(),
 			})
 			return
@@ -89,27 +78,19 @@ func Logger(deps *app.Dependencies) gin.HandlerFunc {
 		c.Next()
 
 		responseTime := time.Since(t).String()
-		responseBody := blw.body.String()
-		responseHeaders := formatHeaders(c.Writer.Header())
 
-		updatedLogParams := database.UpdateAccessLogParams{
-			ID:              insertedLog.ID,
-			Ip:              insertedLog.Ip,
-			Method:          insertedLog.Method,
-			Endpoint:        insertedLog.Endpoint,
-			RequestBody:     insertedLog.RequestBody,
-			RequestHeaders:  insertedLog.RequestHeaders,
-			RequestQuery:    insertedLog.RequestQuery,
-			RequestParams:   insertedLog.RequestParams,
-			ResponseBody:    pgtype.Text{String: responseBody, Valid: true},
-			ResponseHeaders: pgtype.Text{String: responseHeaders, Valid: true},
-			ResponseTime:    pgtype.Text{String: responseTime, Valid: responseTime != ""},
-			StatusCode:      pgtype.Int4{Int32: int32(c.Writer.Status()), Valid: true},
-			UpdatedAt:       pgtype.Timestamp{Time: time.Now(), Valid: true},
+		update := deps.Core.DB.AccessLog.UpdateOneID(insertedLog.ID).
+			SetResponseHeaders(formatHeaders(c.Writer.Header())).
+			SetResponseBody(blw.body.String()).
+			SetResponseTime(responseTime).
+			SetStatusCode(c.Writer.Status()).
+			SetUpdatedAt(time.Now())
+
+		if contentType != "" && !isJsonContentType(contentType) {
+			update.SetResponseHeaders("Non-JSON content type: " + contentType)
 		}
 
-		_, err = deps.Core.DB.UpdateAccessLog(ctx, updatedLogParams)
-		if err != nil {
+		if _, err := update.Save(ctx); err != nil {
 			log.Printf("error updating accesslog: %v", err)
 		}
 	}

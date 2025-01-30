@@ -2,18 +2,23 @@ package database
 
 import (
 	"context"
-	"time"
+	"fmt"
+	"log"
 
-	"github.com/jackc/pgx/v5"
+	_ "github.com/lib/pq"
+
+	"github.com/lucasbonna/contafacil_api/ent"
 )
 
-func ConnectToDB(dsn string) (*pgx.Conn, error) {
-  ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second) 
-  defer cancel()
+func ConnectToDB(host string, port string, user string, dbname string, password string) *ent.Client {
+	client, err := ent.Open("postgres", fmt.Sprintf("host=%s port=%s user=%s dbname=%s password=%s sslmode=disable", host, port, user, dbname, password))
+	if err != nil {
+		log.Fatalf("failed opening connection to postgres: %v", err)
+	}
 
-  conn, err := pgx.Connect(ctx, dsn)
-  if err != nil {
-    return nil, err
-  }
-  return conn, nil
+	if err := client.Schema.Create(context.Background()); err != nil {
+		log.Fatalf("failed creating schema resources: %v", err)
+	}
+
+	return client
 }

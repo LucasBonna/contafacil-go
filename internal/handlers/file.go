@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"archive/zip"
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,10 +12,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/lucasbonna/contafacil_api/internal/app"
-	"github.com/lucasbonna/contafacil_api/internal/database"
 	"github.com/lucasbonna/contafacil_api/internal/schemas"
 )
 
@@ -59,17 +58,17 @@ func HandlerUploadFile(deps *app.Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		createdFile, err := deps.Core.DB.CreateFile(c.Request.Context(), database.CreateFileParams{
-			ID:          pgtype.UUID{Bytes: fileId, Valid: true},
-			FileName:    fileName,
-			Extension:   getFileExtension(fileName),
-			ContentType: contentType,
-			FilePath:    fileId.String(),
-			CreatedAt:   pgtype.Timestamp{Time: time.Now(), Valid: true},
-			UpdatedAt:   pgtype.Timestamp{Time: time.Now(), Valid: true},
-		})
+		createdFile, err := deps.Core.DB.File.Create().
+			SetID(fileId).
+			SetName(fileName).
+			SetExtension(getFileExtension(fileName)).
+			SetContentType(contentType).
+			SetFilePath(string(fileId.String())).
+			SetCreatedAt(time.Now()).
+			SetUpdatedAt(time.Now()).
+			Save(context.Background())
 		if err != nil {
-			log.Printf("error saving file meteadata on db: %v", err)
+			log.Printf("error saving file metadata on db: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "error saving file on db"})
 			return
 		}

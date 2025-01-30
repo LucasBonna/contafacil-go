@@ -1,7 +1,6 @@
 package server
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/gin-contrib/cors"
@@ -16,7 +15,7 @@ type Server struct {
 	deps *app.Dependencies
 }
 
-func NewServer(dbConnStr string, deps *app.Dependencies) *Server {
+func NewServer(deps *app.Dependencies) *Server {
 	return &Server{
 		deps: deps,
 	}
@@ -38,7 +37,6 @@ func (s *Server) StartServer() {
 
 	r.Use(func(c *gin.Context) {
 		if c.Request.Host != expectedHost {
-			log.Println("request host", c.Request.Host)
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid host header"})
 			return
 		}

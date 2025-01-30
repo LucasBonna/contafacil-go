@@ -37,13 +37,11 @@ func main() {
 	storageManager := storage.SetStorage(r2Client)
 
 	// Create db connection
-	dbConn, err := database.ConnectToDB(config.Env.Db_url)
+	dbConn := database.ConnectToDB(config.Env.DB_Host, config.Env.DB_Port, config.Env.DB_User, config.Env.DB_Name, config.Env.DB_Password)
 	if err != nil {
 		log.Fatalf("error connecting to database: %v", err)
 	}
-
-	// Get queries
-	queries := database.New(dbConn)
+	defer dbConn.Close()
 
 	// Create Resty Client
 	restyClient := resty.New()
@@ -53,8 +51,8 @@ func main() {
 	asynqClient := asynq.NewClient(asynq.RedisClientOpt{Addr: config.Env.RedisAddr})
 	defer asynqClient.Close()
 
-	core_deps := &app.CoreDependencies{
-		DB: queries,
+	coreDeps := &app.CoreDependencies{
+		DB: dbConn,
 		AQ: asynqClient,
 		SM: storageManager,
 		RC: restyClient,
@@ -62,20 +60,20 @@ func main() {
 
 	tecnospeedService := services.NewTecnospeedService(restyClient, config.Env.TSUsername, config.Env.TSPassword, config.Env.TSBaseUrl)
 
-	external_deps := &app.ExternalDependencies{
+	externalDeps := &app.ExternalDependencies{
 		TecnospeedService: tecnospeedService,
 	}
 
 	xmlService := services.NewXmlService()
 
-	internal_deps := &app.InternalDependencies{
+	internalDeps := &app.InternalDependencies{
 		XMLService: xmlService,
 	}
 
 	deps := &app.Dependencies{
-		Core:     *core_deps,
-		External: *external_deps,
-		Internal: *internal_deps,
+		Core:     *coreDeps,
+		External: *externalDeps,
+		Internal: *internalDeps,
 	}
 
 	if config.Env.Type == "worker" {
@@ -122,7 +120,7 @@ func main() {
 		return // Sair após shutdown
 
 	}
-	server := server.NewServer(config.Env.Db_url, deps)
+	server := server.NewServer(deps)
 
 	// Canal para servidor Gin
 	errChan := make(chan error, 1)

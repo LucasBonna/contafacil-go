@@ -1,28 +1,30 @@
 package schemas
 
 import (
-	"github.com/jackc/pgx/v5/pgtype"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 type User struct {
-	ID        pgtype.UUID
+	ID        uuid.UUID
 	Username  string
 	ApiKey    string
-	Role      pgtype.Text
-	ClientID  pgtype.UUID
-	CreatedAt pgtype.Timestamp
-	UpdatedAt pgtype.Timestamp
-	DeletedAt pgtype.Timestamp
+	Role      string
+	ClientID  uuid.UUID
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt time.Time
 }
 
 type Client struct {
-	ID        pgtype.UUID
+	ID        uuid.UUID
 	Name      string
 	Cnpj      string
-	Role      pgtype.Text
-	CreatedAt pgtype.Timestamp
-	UpdatedAt pgtype.Timestamp
-	DeletedAt pgtype.Timestamp
+	Role      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt time.Time
 }
 
 type ClientDetails struct {

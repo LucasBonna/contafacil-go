@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/lucasbonna/contafacil_api/ent/user"
 	"github.com/lucasbonna/contafacil_api/internal/app"
 	"github.com/lucasbonna/contafacil_api/internal/schemas"
 )
@@ -46,7 +47,11 @@ func Authenticate(deps *app.Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		queryResp, err := deps.Core.DB.GetUserAndClientByApiKey(context.Background(), token)
+		user, err := deps.Core.DB.User.
+			Query().
+			Where(user.APIKey(token)).
+			WithClients().
+			Only(context.Background())
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": "user not found",
@@ -54,25 +59,27 @@ func Authenticate(deps *app.Dependencies) gin.HandlerFunc {
 			return
 		}
 
+		client := user.Edges.Clients
+
 		clientDetails := schemas.ClientDetails{
 			User: schemas.User{
-				ID:        queryResp.UserID,
-				Username:  queryResp.Username,
-				ApiKey:    queryResp.ApiKey,
-				Role:      queryResp.UserRole,
-				ClientID:  queryResp.ClientID,
-				CreatedAt: queryResp.UserCreatedAt,
-				UpdatedAt: queryResp.UserUpdatedAt,
-				DeletedAt: queryResp.UserDeletedAt,
+				ID:        user.ID,
+				Username:  user.Username,
+				ApiKey:    user.APIKey,
+				Role:      string(user.Role),
+				ClientID:  user.ClientID,
+				CreatedAt: user.CreatedAt,
+				UpdatedAt: user.UpdatedAt,
+				DeletedAt: user.DeletedAt,
 			},
 			Client: schemas.Client{
-				ID:        queryResp.ClientID,
-				Name:      queryResp.ClientName,
-				Cnpj:      queryResp.ClientCnpj,
-				Role:      queryResp.ClientRole,
-				CreatedAt: queryResp.ClientCreatedAt,
-				UpdatedAt: queryResp.ClientUpdatedAt,
-				DeletedAt: queryResp.ClientDeletedAt,
+				ID:        client.ID,
+				Name:      client.Name,
+				Cnpj:      client.Cnpj,
+				Role:      string(client.Role),
+				CreatedAt: client.CreatedAt,
+				UpdatedAt: client.UpdatedAt,
+				DeletedAt: client.DeletedAt,
 			},
 		}
 

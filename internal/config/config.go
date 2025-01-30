@@ -8,7 +8,11 @@ import (
 )
 
 type envs struct {
-	Db_url                 string
+	DB_Host                string
+	DB_Port                string
+	DB_Name                string
+	DB_User                string
+	DB_Password            string
 	Port                   string
 	RabbitMQUrl            string
 	StorageEndpoint        string
@@ -26,7 +30,11 @@ type envs struct {
 }
 
 var Env = &envs{
-	Db_url:                 genv.Key("DB_URL").String(),
+	DB_Host:                genv.Key("DB_HOST").String(),
+	DB_Port:                genv.Key("DB_PORT").String(),
+	DB_Name:                genv.Key("DB_NAME").String(),
+	DB_User:                genv.Key("DB_USER").String(),
+	DB_Password:            genv.Key("DB_PASSWORD").String(),
 	Port:                   genv.Key("PORT").Default("8000").String(),
 	RabbitMQUrl:            genv.Key("RABBITMQ_URL").String(),
 	StorageEndpoint:        genv.Key("STORAGE_ENDPOINT").String(),

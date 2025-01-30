@@ -37,7 +37,7 @@ services:
     image: hibiken/asynqmon:latest
     platform: linux/amd64
     ports:
-      - "8080:8080"  # Porta para acesso à UI
+      - "8080:8080"
     environment:
       REDIS_ADDR: redis:6379
       REDIS_PASSWORD: sua_senha

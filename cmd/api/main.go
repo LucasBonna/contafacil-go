@@ -46,7 +46,6 @@ func main() {
 	// Create Resty Client
 	restyClient := resty.New()
 	restyClient.SetTimeout(60 * time.Second)
-	restyClient.SetDebug(true)
 
 	// Create Asynq Client
 	asynqClient := asynq.NewClient(asynq.RedisClientOpt{Addr: config.Env.RedisAddr})

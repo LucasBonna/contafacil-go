@@ -12,6 +12,7 @@ import (
 	"github.com/lucasbonna/contafacil_api/ent/clients"
 	"github.com/lucasbonna/contafacil_api/internal/app"
 	"github.com/lucasbonna/contafacil_api/internal/schemas"
+	"github.com/lucasbonna/contafacil_api/internal/utils"
 )
 
 type ClientHandlers struct {
@@ -53,9 +54,21 @@ func (rh ClientHandlers) CreateClient() gin.HandlerFunc {
 
 func (rh ClientHandlers) GetClient() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Get authenticated user details
+		clientDetails := utils.GetClientDetails(c)
+		if clientDetails == nil {
+			return
+		}
+
 		id, err := uuid.Parse(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid client ID"})
+			return
+		}
+
+		// Check if user is admin or requesting their own client
+		if clientDetails.User.Role != "admin" && clientDetails.Client.ID != id {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 			return
 		}
 

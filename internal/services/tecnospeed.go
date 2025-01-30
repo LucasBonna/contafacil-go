@@ -80,7 +80,7 @@ func (ts *tecnospeedService) IssueGNRE(xmlContent string, group string, document
 func (ts *tecnospeedService) DownloadGNRE(group string, document string, chaveNota string, numRecibo string) ([]byte, error) {
 	var fileBytes []byte
 	endpoint := fmt.Sprintf("%s/gnre/imprime", ts.baseUrl)
-	_, err := ts.client.R().
+	resp, err := ts.client.R().
 		SetBasicAuth(ts.username, ts.password).
 		SetQueryParams(map[string]string{
 			"Grupo":        group,
@@ -89,10 +89,23 @@ func (ts *tecnospeedService) DownloadGNRE(group string, document string, chaveNo
 			"Url":          "0",
 			"NumeroRecibo": numRecibo,
 		}).
-		SetResult(fileBytes).
-		Post(endpoint)
+		Get(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("error issuing gnre %s", err)
+	}
+
+	responseBody := resp.String()
+	responseBody = strings.TrimSpace(responseBody)
+
+	fileBytes = []byte(responseBody)
+
+	if strings.HasPrefix(responseBody, "EXCEPTION") {
+		parts := strings.Split(responseBody, ",")
+		if len(parts) < 3 {
+			return nil, fmt.Errorf("formato de erro inesperado")
+		}
+
+		return nil, fmt.Errorf("error downloading gnre: %s", parts[2])
 	}
 
 	return fileBytes, nil

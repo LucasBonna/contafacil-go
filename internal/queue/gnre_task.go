@@ -14,6 +14,7 @@ import (
 	"github.com/lucasbonna/contafacil_api/ent/gnreemission"
 	"github.com/lucasbonna/contafacil_api/internal/app"
 	"github.com/lucasbonna/contafacil_api/internal/schemas"
+	"github.com/lucasbonna/contafacil_api/internal/utils"
 )
 
 type GNREHandler struct {
@@ -49,11 +50,7 @@ func (gh *GNREHandler) ProcessIssueGNRE(ctx context.Context, t *asynq.Task) erro
 
 	tecnospeedResponse, err := gh.Deps.External.TecnospeedService.IssueGNRE(p.XmlContent, "ContaFacil", p.ClientDetails.Client.Cnpj)
 	if err != nil {
-		_, txErr := tx.Emission.UpdateOneID(p.EmissionId).
-			SetStatus(emission.StatusFAILED).
-			SetMessage("Erro ao emitir GNRE").
-			Save(ctx)
-		if txErr != nil {
+		if txErr := utils.FinishTask(tx, p.EmissionId, emission.StatusFAILED, "Erro ao emitir GNRE"); txErr != nil {
 			return fmt.Errorf("failed to update emission: %v", txErr)
 		}
 
@@ -61,11 +58,7 @@ func (gh *GNREHandler) ProcessIssueGNRE(ctx context.Context, t *asynq.Task) erro
 	}
 	if tecnospeedResponse.Failure != nil {
 		if tecnospeedResponse.Failure.Message != "" {
-			_, txErr := tx.Emission.UpdateOneID(p.EmissionId).
-				SetStatus(emission.StatusFAILED).
-				SetMessage(tecnospeedResponse.Failure.Message).
-				Save(ctx)
-			if txErr != nil {
+			if txErr := utils.FinishTask(tx, p.EmissionId, emission.StatusFAILED, tecnospeedResponse.Failure.Message); txErr != nil {
 				return fmt.Errorf("failed to update emission: %v", txErr)
 			}
 
@@ -79,21 +72,23 @@ func (gh *GNREHandler) ProcessIssueGNRE(ctx context.Context, t *asynq.Task) erro
 		return fmt.Errorf("failed to downloadGNRE")
 	}
 
+	if len(fileBytes) == 0 {
+		return fmt.Errorf("bad pdf download GNRE")
+	}
+
 	fileReader := bytes.NewReader(fileBytes)
 
-	gh.Deps.Core.SM.Upload(fileReader, uuid.New())
+	fileId := uuid.New()
+	gh.Deps.Core.SM.Upload(fileReader, fileId)
 
-	_, err = tx.Emission.UpdateOneID(p.EmissionId).
-		SetStatus(emission.StatusFINISHED).
-		SetMessage(tecnospeedResponse.Sucess.Motivo).
-		Save(ctx)
-	if err != nil {
+	if err := utils.FinishTask(tx, p.EmissionId, emission.StatusFINISHED, tecnospeedResponse.Sucess.Motivo); err != nil {
 		return fmt.Errorf("emission update failed: %v", err)
 	}
 
 	gnreUpdate, err := tx.GnreEmission.Update().
 		Where(gnreemission.HasEmissionWith(emission.ID(p.EmissionId))).
 		SetNumeroRecibo(tecnospeedResponse.Sucess.NumRecibo).
+		SetPdf(fileId).
 		Save(ctx)
 	if err != nil || gnreUpdate == 0 {
 		return fmt.Errorf("gnre emission update failed: %v (records affected: %d)", err, gnreUpdate)
@@ -118,23 +113,11 @@ func (gh *GNREHandler) ProcessIssueGNRE(ctx context.Context, t *asynq.Task) erro
 	gnreData := fullEmission.Edges.GnreEmission
 	gnre := schemas.GNRE{
 		ID:             fullEmission.ID,
-		ClientId:       fullEmission.ClientID,
-		UserId:         fullEmission.UserID,
-		Message:        fullEmission.Message,
-		EmissionType:   string(fullEmission.EmissionType),
-		Status:         string(fullEmission.Status),
-		ChaveNota:      gnreData.ChaveNota,
 		CodBarrasGuia:  gnreData.CodBarrasGuia,
 		ComprovantePDF: gnreData.ComprovantePdf,
-		GuiaAmount:     gnreData.GuiaAmount,
 		NumeroRecibo:   gnreData.NumeroRecibo,
 		PDF:            gnreData.Pdf,
 		XML:            gnreData.XML,
-		Destinatario:   gnreData.Destinatario,
-		NumNota:        gnreData.NumNota,
-		CreatedAt:      fullEmission.CreatedAt,
-		UpdatedAt:      fullEmission.UpdatedAt,
-		DeletedAt:      fullEmission.DeletedAt,
 	}
 
 	jsonGNRE, err := json.Marshal(gnre)

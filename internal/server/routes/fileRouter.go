@@ -12,6 +12,6 @@ func FileRouter(r *gin.Engine, deps *app.Dependencies) {
 	{
 		file.POST("/upload", handlers.HandlerUploadFile(deps))
 		file.POST("/download/batch", handlers.HandlerDownloadBatch(deps))
-		file.POST("/download/:fileId", handlers.HandlerDownloadFile(deps))
+		file.GET("/download/:fileId", handlers.HandlerDownloadFile(deps))
 	}
 }

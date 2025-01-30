@@ -1,7 +1,6 @@
 package server
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/gin-contrib/cors"
@@ -38,7 +37,6 @@ func (s *Server) StartServer() {
 
 	r.Use(func(c *gin.Context) {
 		if c.Request.Host != expectedHost {
-			log.Println("request host", c.Request.Host)
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid host header"})
 			return
 		}

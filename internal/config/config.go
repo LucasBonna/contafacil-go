@@ -27,6 +27,7 @@ type envs struct {
 	FrontEndUrl            string
 	RedisAddr              string
 	Type                   string
+	JWTSecret              string
 }
 
 var Env = &envs{
@@ -46,9 +47,10 @@ var Env = &envs{
 	TSUsername:             genv.Key("TS_USERNAME").String(),
 	TSPassword:             genv.Key("TS_PASSWORD").String(),
 	TSBaseUrl:              genv.Key("TS_BASE_URL").String(),
-	FrontEndUrl:            genv.Key("FRONTEND_URL").Default("localhost:8000").String(),
+	FrontEndUrl:            genv.Key("FRONTEND_URL").Default("http://localhost:3000").String(),
 	RedisAddr:              genv.Key("REDIS_ADDR").String(),
 	Type:                   genv.Key("TYPE").String(),
+	JWTSecret:              genv.Key("JWTSecret").String(),
 }
 
 func InitEnvs() {

@@ -9,7 +9,6 @@ import (
 type CreateUserInput struct {
 	Username string    `json:"username" binding:"required"`
 	Password string    `json:"password" binding:"required"`
-	APIKey   string    `json:"apiKey" binding:"required"`
 	Role     user.Role `json:"role" binding:"required"`
 	ClientID uuid.UUID `json:"clientId" binding:"required"`
 }

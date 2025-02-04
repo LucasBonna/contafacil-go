@@ -18,13 +18,13 @@ type User struct {
 }
 
 type Client struct {
-	ID        uuid.UUID
-	Name      string
-	Cnpj      string
-	Role      string
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	DeletedAt time.Time
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Cnpj      string    `json:"cnpj"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	DeletedAt time.Time `json:"deleted_at"`
 }
 
 type ClientDetails struct {

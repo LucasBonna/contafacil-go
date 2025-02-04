@@ -18,7 +18,8 @@ func Authenticate(deps *app.Dependencies) gin.HandlerFunc {
 
 		if strings.HasPrefix(path, "/monitoring") ||
 			strings.HasPrefix(path, "/swagger") ||
-			strings.HasPrefix(path, "/docs") {
+			strings.HasPrefix(path, "/docs") ||
+			strings.HasPrefix(path, "/auth/login") {
 			c.Next()
 			return
 		}

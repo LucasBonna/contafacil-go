@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
@@ -81,10 +82,6 @@ func (gh *GNREHandler) ProcessIssueGNRE(ctx context.Context, t *asynq.Task) erro
 	fileId := uuid.New()
 	gh.Deps.Core.SM.Upload(fileReader, fileId)
 
-	if err := utils.FinishTask(tx, p.EmissionId, emission.StatusFINISHED, tecnospeedResponse.Sucess.Motivo); err != nil {
-		return fmt.Errorf("emission update failed: %v", err)
-	}
-
 	gnreUpdate, err := tx.GnreEmission.Update().
 		Where(gnreemission.HasEmissionWith(emission.ID(p.EmissionId))).
 		SetNumeroRecibo(tecnospeedResponse.Sucess.NumRecibo).
@@ -106,27 +103,30 @@ func (gh *GNREHandler) ProcessIssueGNRE(ctx context.Context, t *asynq.Task) erro
 		return fmt.Errorf("critical error: gnre emission not found for emission %s", p.EmissionId)
 	}
 
+	if err := utils.FinishTask(tx, p.EmissionId, emission.StatusFINISHED, tecnospeedResponse.Sucess.Motivo); err != nil {
+		return fmt.Errorf("emission update failed: %v", err)
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("transaction commit failed: %v", err)
 	}
 
-	gnreData := fullEmission.Edges.GnreEmission
-	gnre := schemas.GNRE{
-		ID:             fullEmission.ID,
-		CodBarrasGuia:  gnreData.CodBarrasGuia,
-		ComprovantePDF: gnreData.ComprovantePdf,
-		NumeroRecibo:   gnreData.NumeroRecibo,
-		PDF:            gnreData.Pdf,
-		XML:            gnreData.XML,
+	ssePayload := SSEUpdatePayload{
+		EmissionID: p.EmissionId,
+		Status:     emission.StatusFINISHED,
+		Message:    tecnospeedResponse.Sucess.Motivo,
+		ClientID:   p.ClientDetails.Client.ID,
+		UserID:     p.ClientDetails.User.ID,
 	}
 
-	jsonGNRE, err := json.Marshal(gnre)
+	task, err := NewTask(TypeSSEUpdate, ssePayload)
 	if err != nil {
-		return fmt.Errorf("error marshaling gnre: %v", err)
+		log.Printf("failed to enqueue SSE update: %v", err)
 	}
 
-	if _, err = t.ResultWriter().Write(jsonGNRE); err != nil {
-		return fmt.Errorf("failed to save result task: %v", err)
+	_, err = gh.Deps.Core.AQ.Enqueue(task, asynq.Queue("IssueGNREQueue"), asynq.Retention(48*time.Hour))
+	if err != nil {
+		return err
 	}
 
 	return nil

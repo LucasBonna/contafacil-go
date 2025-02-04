@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 	_ "github.com/sakirsensoy/genv/dotenv/autoload"
 
@@ -15,7 +16,9 @@ import (
 	"github.com/lucasbonna/contafacil_api/internal/config"
 	"github.com/lucasbonna/contafacil_api/internal/database"
 	"github.com/lucasbonna/contafacil_api/internal/queue"
+	"github.com/lucasbonna/contafacil_api/internal/schemas"
 	"github.com/lucasbonna/contafacil_api/internal/server"
+	"github.com/lucasbonna/contafacil_api/internal/server/sse"
 	"github.com/lucasbonna/contafacil_api/internal/services"
 	"github.com/lucasbonna/contafacil_api/internal/storage"
 	"github.com/lucasbonna/contafacil_api/internal/storage/r2"
@@ -51,11 +54,16 @@ func main() {
 	asynqClient := asynq.NewClient(asynq.RedisClientOpt{Addr: config.Env.RedisAddr})
 	defer asynqClient.Close()
 
+	// Create SSEManager
+	sseManager := sse.NewSSEManager()
+
 	coreDeps := &app.CoreDependencies{
-		DB: dbConn,
-		AQ: asynqClient,
-		SM: storageManager,
-		RC: restyClient,
+		DB:          dbConn,
+		AQ:          asynqClient,
+		SM:          storageManager,
+		RC:          restyClient,
+		SSEManager:  sseManager,
+		SSEChannels: make(map[uuid.UUID]chan schemas.SSEMessage),
 	}
 
 	tecnospeedService := services.NewTecnospeedService(restyClient, config.Env.TSUsername, config.Env.TSPassword, config.Env.TSBaseUrl)
@@ -83,16 +91,19 @@ func main() {
 			asynq.Config{
 				Concurrency: 10,
 				Queues: map[string]int{
-					"IssueGNREQueue": 10,
-					"critical":       2,
+					"IssueGNREQueue":    5,
+					"SSEEmissionUpdate": 10,
+					"critical":          2,
 				},
 			},
 		)
 
 		gnreHandler := queue.NewGNREHandler(deps)
+		sseHandler := queue.NewSSEHandler(deps)
 
 		mux := asynq.NewServeMux()
 		mux.HandleFunc(queue.TypeIssueGNRE, gnreHandler.ProcessIssueGNRE)
+		mux.HandleFunc(queue.TypeSSEUpdate, sseHandler.ProcessSSEUpdate)
 
 		// Canal para capturar erros do servidor Asynq
 		errChan := make(chan error, 1)

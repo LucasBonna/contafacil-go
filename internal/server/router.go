@@ -8,8 +8,9 @@ import (
 )
 
 func InitRouters(r *gin.Engine, deps *app.Dependencies) {
-	// Aqui vem os routers
 	routes.DefaultRouter(r)
+
+	routes.AuthRouter(r, deps)
 
 	routes.ClientRoutes(r, &deps.Core)
 
@@ -20,4 +21,6 @@ func InitRouters(r *gin.Engine, deps *app.Dependencies) {
 	routes.EmissionRouter(r, deps)
 
 	routes.TestRoutes(r, deps)
+
+	routes.SSERouter(r, deps)
 }

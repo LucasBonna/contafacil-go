@@ -41,9 +41,10 @@ func (rh UserHandlers) CreateUser() gin.HandlerFunc {
 		}
 
 		user, err := rh.Core.DB.User.Create().
+			SetID(uuid.New()).
 			SetUsername(input.Username).
 			SetPassword(string(hashedPassword)).
-			SetAPIKey(input.APIKey).
+			SetAPIKey(utils.GenerateAPIKey()).
 			SetRole(input.Role).
 			SetClientID(input.ClientID).
 			Save(c.Request.Context())
@@ -53,10 +54,13 @@ func (rh UserHandlers) CreateUser() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusCreated, gin.H{
-			"id":       user.ID,
-			"username": user.Username,
-			"role":     user.Role,
-			"clientId": user.ClientID,
+			"id":        user.ID,
+			"username":  user.Username,
+			"role":      user.Role,
+			"clientId":  user.ClientID,
+			"createdAt": user.CreatedAt,
+			"updatedAt": user.UpdatedAt,
+			"deletedAt": user.DeletedAt,
 		})
 	}
 }
@@ -74,7 +78,7 @@ func (rh UserHandlers) GetUser() gin.HandlerFunc {
 			return
 		}
 
-		if clientDetails.User.Role != "ADMIN" && clientDetails.User.ID != id {
+		if clientDetails.User.ID != id {
 			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 			return
 		}
@@ -88,10 +92,13 @@ func (rh UserHandlers) GetUser() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"id":       user.ID,
-			"username": user.Username,
-			"role":     user.Role,
-			"clientId": user.ClientID,
+			"id":        user.ID,
+			"username":  user.Username,
+			"role":      user.Role,
+			"clientId":  user.ClientID,
+			"createdAt": user.CreatedAt,
+			"updatedAt": user.UpdatedAt,
+			"deletedAt": user.DeletedAt,
 		})
 	}
 }
@@ -145,10 +152,13 @@ func (rh UserHandlers) ListAllUsers() gin.HandlerFunc {
 		var response []gin.H
 		for _, user := range users {
 			response = append(response, gin.H{
-				"id":       user.ID,
-				"username": user.Username,
-				"role":     user.Role,
-				"clientId": user.ClientID,
+				"id":        user.ID,
+				"username":  user.Username,
+				"role":      user.Role,
+				"clientId":  user.ClientID,
+				"createdAt": user.CreatedAt,
+				"updatedAt": user.UpdatedAt,
+				"deletedAt": user.DeletedAt,
 			})
 		}
 
@@ -172,9 +182,23 @@ func (rh UserHandlers) UpdateUser() gin.HandlerFunc {
 			return
 		}
 
+		clientDetails := utils.GetClientDetails(c)
+
+		if clientDetails.User.ID != id && clientDetails.User.Role != string(user.RoleADMIN) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": "you are not authorized to update this user",
+			})
+			return
+		}
+
 		var input schemas.UpdateUserInput
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		if clientDetails.User.ID != id && (input.Password != nil || input.Username != nil) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "you cant update another user credentials"})
 			return
 		}
 
@@ -201,10 +225,13 @@ func (rh UserHandlers) UpdateUser() gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"id":       user.ID,
-			"username": user.Username,
-			"role":     user.Role,
-			"clientId": user.ClientID,
+			"id":        user.ID,
+			"username":  user.Username,
+			"role":      user.Role,
+			"clientId":  user.ClientID,
+			"createdAt": user.CreatedAt,
+			"updatedAt": user.UpdatedAt,
+			"deletedAt": user.DeletedAt,
 		})
 	}
 }

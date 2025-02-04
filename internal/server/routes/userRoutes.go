@@ -12,10 +12,10 @@ func UserRouters(r *gin.Engine, core *app.CoreDependencies) {
 
 	users := r.Group("/users")
 	{
-		users.GET("/", userHandlers.ListAllUsers())
-		users.GET("/:id", userHandlers.GetUser())
-		users.POST("/", userHandlers.CreateUser())
-		users.PATCH("/:id", userHandlers.UpdateUser())
-		users.DELETE("/:id", userHandlers.DeleteUser())
+		users.GET("", userHandlers.ListAllUsers())
+		users.GET(":id", userHandlers.GetUser())
+		users.POST("", userHandlers.CreateUser())
+		users.PATCH(":id", userHandlers.UpdateUser())
+		users.DELETE(":id", userHandlers.DeleteUser())
 	}
 }

@@ -13,8 +13,8 @@ func EmissionRouter(r *gin.Engine, deps *app.Dependencies) {
 	{
 		gnre := emission.Group("/gnre")
 		{
-			gnre.GET("/", emissionHandlers.HandlerListEmissions())
-			gnre.POST("/", emissionHandlers.IssueGNREHandler())
+			gnre.GET("", emissionHandlers.HandlerListEmissions())
+			gnre.POST("", emissionHandlers.IssueGNREHandler())
 		}
 	}
 }

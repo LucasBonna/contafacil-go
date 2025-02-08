@@ -4,60 +4,36 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 
-	"github.com/lucasbonna/contafacil_api/ent/emission"
 	"github.com/lucasbonna/contafacil_api/internal/app"
-	"github.com/lucasbonna/contafacil_api/internal/schemas"
 )
 
 type SSEHandler struct {
-	Deps *app.Dependencies
+	deps *app.Dependencies
 }
 
 func NewSSEHandler(deps *app.Dependencies) *SSEHandler {
-	return &SSEHandler{
-		Deps: deps,
-	}
+	return &SSEHandler{deps: deps}
 }
 
-type SSEUpdatePayload struct {
-	EmissionID uuid.UUID
-	Status     emission.Status
-	Message    string
-	ClientID   uuid.UUID
-	UserID     uuid.UUID
-}
-
-func (sh *SSEHandler) ProcessSSEUpdate(ctx context.Context, t *asynq.Task) error {
-	var p SSEUpdatePayload
-	if err := json.Unmarshal(t.Payload(), &p); err != nil {
-		return fmt.Errorf("json.unmarshal failed: %v: %w", err, asynq.SkipRetry)
+func (h *SSEHandler) ProcessSSEUpdate(ctx context.Context, t *asynq.Task) error {
+	var payload SSEUpdatePayload
+	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
+		return fmt.Errorf("invalid payload: %v", err)
 	}
 
-	message := schemas.SSEMessage{
-		Event: "emission_update",
-		Data: schemas.EmissionUpdate{
-			EmissionID: p.EmissionID,
-			Status:     p.Status,
-			Message:    p.Message,
-		},
+	// Verificar presença ativa
+	if !h.deps.Core.SSEMgr.IsConnected(payload.UserID) {
+		return nil // Descarta se não conectado
 	}
 
-	retries := 3
-	for i := 0; i < retries; i++ {
-		ok := sh.Deps.Core.SSEManager.SendToClient(p.UserID, message)
-		if ok {
-			return nil
-		}
-		log.Printf("Retrying send to user %s (%d/%d)", p.UserID, i+1, retries)
-		time.Sleep(1 * time.Second)
+	// Enviar mensagem diretamente
+	success := h.deps.Core.SSEMgr.Send(payload.UserID, payload.Message)
+	if !success {
+		return fmt.Errorf("failed to send SSE message")
 	}
 
-	log.Printf("Failed to send message to user %s after %d retries", p.UserID, retries)
 	return nil
 }

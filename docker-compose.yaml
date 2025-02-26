@@ -9,7 +9,7 @@ services:
     environment:
       - TYPE=api
     ports:
-      - "8000:8000"
+      - "8040:8040"
     restart: unless-stopped
     volumes:
       - .:/app

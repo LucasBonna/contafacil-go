@@ -1,14 +1,15 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/go-resty/resty/v2"
-	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 	_ "github.com/sakirsensoy/genv/dotenv/autoload"
 
@@ -16,10 +17,9 @@ import (
 	"github.com/lucasbonna/contafacil_api/internal/config"
 	"github.com/lucasbonna/contafacil_api/internal/database"
 	"github.com/lucasbonna/contafacil_api/internal/queue"
-	"github.com/lucasbonna/contafacil_api/internal/schemas"
 	"github.com/lucasbonna/contafacil_api/internal/server"
-	"github.com/lucasbonna/contafacil_api/internal/server/sse"
 	"github.com/lucasbonna/contafacil_api/internal/services"
+	"github.com/lucasbonna/contafacil_api/internal/sse"
 	"github.com/lucasbonna/contafacil_api/internal/storage"
 	"github.com/lucasbonna/contafacil_api/internal/storage/r2"
 )
@@ -54,16 +54,26 @@ func main() {
 	asynqClient := asynq.NewClient(asynq.RedisClientOpt{Addr: config.Env.RedisAddr})
 	defer asynqClient.Close()
 
+	// Create Redis Client
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     config.Env.RedisAddr,
+		Password: "", // se necessário
+		DB:       0,
+	})
+	if _, err := redisClient.Ping(context.Background()).Result(); err != nil {
+		log.Fatalf("Erro ao conectar ao Redis: %v", err)
+	}
+	defer redisClient.Close()
+
 	// Create SSEManager
-	sseManager := sse.NewSSEManager()
+	sseManager := sse.NewManager(redisClient)
 
 	coreDeps := &app.CoreDependencies{
-		DB:          dbConn,
-		AQ:          asynqClient,
-		SM:          storageManager,
-		RC:          restyClient,
-		SSEManager:  sseManager,
-		SSEChannels: make(map[uuid.UUID]chan schemas.SSEMessage),
+		DB:     dbConn,
+		AQ:     asynqClient,
+		SM:     storageManager,
+		RC:     restyClient,
+		SSEMgr: sseManager,
 	}
 
 	tecnospeedService := services.NewTecnospeedService(restyClient, config.Env.TSUsername, config.Env.TSPassword, config.Env.TSBaseUrl)
@@ -103,7 +113,7 @@ func main() {
 
 		mux := asynq.NewServeMux()
 		mux.HandleFunc(queue.TypeIssueGNRE, gnreHandler.ProcessIssueGNRE)
-		mux.HandleFunc(queue.TypeSSEUpdate, sseHandler.ProcessSSEUpdate)
+		mux.HandleFunc(queue.TypeSSEEmissionUpdate, sseHandler.ProcessSSEUpdate)
 
 		// Canal para capturar erros do servidor Asynq
 		errChan := make(chan error, 1)

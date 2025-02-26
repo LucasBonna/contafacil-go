@@ -1,6 +1,8 @@
 package server
 
 import (
+	"log"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
@@ -22,6 +24,7 @@ func NewServer(deps *app.Dependencies) *Server {
 func (s *Server) StartServer() {
 	r := gin.New()
 
+	log.Println("frontend_url", config.Env.FrontEndUrl)
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowOrigins = []string{config.Env.FrontEndUrl}
 	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"}

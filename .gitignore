@@ -15,10 +15,6 @@
 /vendor/
 /tmp
 
-# Ignora arquivos de dependências baixadas do Go
-go.sum
-go.mod
-
 # Ignora arquivos temporários ou de configuração do editor
 .idea/
 .vscode/

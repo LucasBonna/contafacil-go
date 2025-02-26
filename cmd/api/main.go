@@ -40,7 +40,7 @@ func main() {
 	storageManager := storage.SetStorage(r2Client)
 
 	// Create db connection
-	dbConn := database.ConnectToDB(config.Env.DB_Host, config.Env.DB_Port, config.Env.DB_User, config.Env.DB_Name, config.Env.DB_Password)
+	dbConn := database.ConnectToDB(config.Env.DB_ConnStr)
 	if err != nil {
 		log.Fatalf("error connecting to database: %v", err)
 	}

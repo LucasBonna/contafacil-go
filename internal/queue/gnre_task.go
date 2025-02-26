@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
@@ -15,6 +14,7 @@ import (
 	"github.com/lucasbonna/contafacil_api/ent/gnreemission"
 	"github.com/lucasbonna/contafacil_api/internal/app"
 	"github.com/lucasbonna/contafacil_api/internal/schemas"
+	"github.com/lucasbonna/contafacil_api/internal/sse"
 	"github.com/lucasbonna/contafacil_api/internal/utils"
 )
 
@@ -111,23 +111,28 @@ func (gh *GNREHandler) ProcessIssueGNRE(ctx context.Context, t *asynq.Task) erro
 		return fmt.Errorf("transaction commit failed: %v", err)
 	}
 
-	ssePayload := SSEUpdatePayload{
-		EmissionID: p.EmissionId,
-		Status:     emission.StatusFINISHED,
-		Message:    tecnospeedResponse.Sucess.Motivo,
-		ClientID:   p.ClientDetails.Client.ID,
-		UserID:     p.ClientDetails.User.ID,
-	}
+	if gh.Deps.Core.SSEMgr.IsConnected(p.ClientDetails.User.ID) {
+		log.Println("is connected")
+		msg := sse.Message{
+			Event: "emission_update",
+			Data: map[string]interface{}{
+				"emission_id": p.EmissionId,
+				"status":      emission.StatusFINISHED,
+				"message":     tecnospeedResponse.Sucess.Motivo,
+			},
+		}
 
-	task, err := NewTask(TypeSSEUpdate, ssePayload)
-	if err != nil {
-		log.Printf("failed to enqueue SSE update: %v", err)
-	}
+		taskPayload := SSEUpdatePayload{
+			UserID:  p.ClientDetails.User.ID,
+			Message: msg,
+		}
 
-	_, err = gh.Deps.Core.AQ.Enqueue(task, asynq.Queue("IssueGNREQueue"), asynq.Retention(48*time.Hour))
-	if err != nil {
-		return err
+		task, err := NewTask(TypeSSEEmissionUpdate, taskPayload)
+		if err == nil {
+			gh.Deps.Core.AQ.Enqueue(task, asynq.Queue("sse_updates"))
+		}
+	} else {
+		log.Println("not connected")
 	}
-
 	return nil
 }

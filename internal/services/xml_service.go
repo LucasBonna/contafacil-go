@@ -2,10 +2,10 @@ package services
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/beevik/etree"
+	"github.com/shopspring/decimal"
 
 	"github.com/lucasbonna/contafacil_api/internal/schemas"
 )
@@ -75,14 +75,10 @@ func (xs *xmlService) ValidateAndProcess(xmlBytes []byte) (schemas.ValidateAndPr
 
 	var cpfCnpj, destinatario, uf string
 
-	cpfElem := dest.SelectElement("CPF")
-	if cpfElem != nil {
+	if cpfElem := dest.SelectElement("CPF"); cpfElem != nil {
 		cpfCnpj = cpfElem.Text()
-	} else {
-		cnpjElem := dest.SelectElement("CNPJ")
-		if cnpjElem != nil {
-			cpfCnpj = cnpjElem.Text()
-		}
+	} else if cnpjElem := dest.SelectElement("CNPJ"); cnpjElem != nil {
+		cpfCnpj = cnpjElem.Text()
 	}
 
 	xNome := dest.SelectElement("xNome")
@@ -116,18 +112,17 @@ func (xs *xmlService) ValidateAndProcess(xmlBytes []byte) (schemas.ValidateAndPr
 	if vICMSUFDestElem == nil {
 		return schemas.ValidateAndProcess{}, fmt.Errorf("vICMSUFDest não encontrado")
 	}
-
-	vICMSUFDestStr := strings.TrimSpace(vICMSUFDestElem.Text())
-	vICMSUFDest, err := strconv.ParseFloat(strings.Replace(vICMSUFDestStr, ",", ".", 1), 64)
+	vICMSUFDestDec, err := decimalFromString(vICMSUFDestElem.Text())
 	if err != nil {
 		return schemas.ValidateAndProcess{}, fmt.Errorf("valor inválido para vICMSUFDest: %w", err)
 	}
 
-	var icmsValue float64
+	var icmsDec decimal.Decimal
 
-	if vICMSUFDest != 0 {
-		icmsValue = vICMSUFDest
+	if vICMSUFDestDec.GreaterThan(decimal.Zero) {
+		icmsDec = vICMSUFDestDec
 	} else {
+
 		infAdic := infNFe.SelectElement("infAdic")
 		if infAdic == nil {
 			return schemas.ValidateAndProcess{}, fmt.Errorf("infAdic não encontrado")
@@ -137,22 +132,45 @@ func (xs *xmlService) ValidateAndProcess(xmlBytes []byte) (schemas.ValidateAndPr
 		if infCpl == nil {
 			return schemas.ValidateAndProcess{}, fmt.Errorf("infCpl não encontrado")
 		}
-
 		infCplText := infCpl.Text()
 
-		estaduaisValue, err := extractEstaduaisValue(infCplText)
-		if err != nil {
-			return schemas.ValidateAndProcess{}, fmt.Errorf("erro ao extrair valor de Estaduais: %w", err)
+		aliquotaDec, errAliquota := extractAliquotaIcmsDecimal(infCplText)
+		if errAliquota == nil && aliquotaDec.GreaterThan(decimal.Zero) {
+
+			vBCElem := ICMSTot.SelectElement("vBC")
+			if vBCElem == nil {
+				return schemas.ValidateAndProcess{}, fmt.Errorf("vBC não encontrado em ICMSTot")
+			}
+
+			vBCDec, errParseBC := decimalFromString(vBCElem.Text())
+			if errParseBC != nil {
+				return schemas.ValidateAndProcess{}, fmt.Errorf("valor inválido para vBC: %w", errParseBC)
+			}
+
+			icmsDec = vBCDec.Mul(aliquotaDec.Div(decimal.NewFromInt(100)))
+		} else {
+
+			estaduaisDec, errEstaduais := extractEstaduaisValueDecimal(infCplText)
+			if errEstaduais != nil {
+				return schemas.ValidateAndProcess{}, fmt.Errorf(
+					"erro ao extrair valor de Estaduais: %w. Erro alíquota: %s",
+					errEstaduais, errAliquota,
+				)
+			}
+
+			if estaduaisDec.LessThanOrEqual(decimal.Zero) {
+				return schemas.ValidateAndProcess{}, fmt.Errorf(
+					"valor de Estaduais é zero ou inexistente",
+				)
+			}
+
+			icmsDec = estaduaisDec
 		}
 
-		if estaduaisValue == 0 {
-			return schemas.ValidateAndProcess{}, fmt.Errorf("valor de Estaduais é zero ou inexistente")
-		}
-
-		icmsValue = estaduaisValue
-
-		vICMSUFDestElem.SetText(fmt.Sprintf("%.2f", icmsValue))
+		vICMSUFDestElem.SetText(icmsDec.Round(2).StringFixed(2))
 	}
+
+	vICMSUFDestElem.SetText(icmsDec.Round(2).StringFixed(2))
 
 	processedXML, err := doc.WriteToString()
 	if err != nil {
@@ -160,7 +178,7 @@ func (xs *xmlService) ValidateAndProcess(xmlBytes []byte) (schemas.ValidateAndPr
 	}
 
 	return schemas.ValidateAndProcess{
-		IcmsValue:    icmsValue,
+		IcmsValue:    icmsDec.Round(2).InexactFloat64(),
 		ChaveNota:    chaveNota,
 		NumNota:      numNota,
 		Destinatario: destinatario,
@@ -170,11 +188,50 @@ func (xs *xmlService) ValidateAndProcess(xmlBytes []byte) (schemas.ValidateAndPr
 	}, nil
 }
 
-func extractEstaduaisValue(text string) (float64, error) {
+// decimalFromString converte uma string para decimal.Decimal,
+// trocando vírgula por ponto na primeira ocorrência.
+func decimalFromString(strVal string) (decimal.Decimal, error) {
+	strVal = strings.TrimSpace(strVal)
+	// Se existir ',', substituir por '.' (apenas a primeira).
+	strVal = strings.Replace(strVal, ",", ".", 1)
+	return decimal.NewFromString(strVal)
+}
+
+// extractAliquotaIcmsDecimal extrai a alíquota do ICMS do estado de destino como decimal.
+// Exemplo esperado no infCplText:
+//
+//	"Aliquota do ICMS do estado de destino 20,00"
+func extractAliquotaIcmsDecimal(text string) (decimal.Decimal, error) {
+	prefix := "Aliquota do ICMS do estado de destino "
+	index := strings.Index(text, prefix)
+	if index == -1 {
+		return decimal.Zero, fmt.Errorf("não encontrou string de aliquota (prefixo '%s')", prefix)
+	}
+
+	substr := text[index+len(prefix):]
+
+	// Geralmente vem "20,00" ou "20.00" antes de espaço, <br>, etc.
+	endIndex := strings.IndexAny(substr, " <,(&\n\t\r")
+	if endIndex == -1 {
+		// Se não achou separador, pega tudo até o fim
+		endIndex = len(substr)
+	}
+	aliqStr := strings.TrimSpace(substr[:endIndex])
+
+	aliquotaDec, err := decimalFromString(aliqStr)
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("valor inválido para aliquota: %w", err)
+	}
+	return aliquotaDec, nil
+}
+
+// extractEstaduaisValueDecimal extrai o valor numérico após "Estaduais R$ "
+// Ex: "Estaduais R$ 45,67" → 45.67
+func extractEstaduaisValueDecimal(text string) (decimal.Decimal, error) {
 	prefix := "Estaduais R$ "
 	index := strings.Index(text, prefix)
 	if index == -1 {
-		return 0, fmt.Errorf("valor de Estaduais não encontrado")
+		return decimal.Zero, fmt.Errorf("valor de Estaduais não encontrado")
 	}
 
 	substr := text[index+len(prefix):]
@@ -185,12 +242,5 @@ func extractEstaduaisValue(text string) (float64, error) {
 	}
 
 	valueStr := strings.TrimSpace(substr[:endIndex])
-	valueStr = strings.Replace(valueStr, ",", ".", 1)
-
-	estaduaisValue, err := strconv.ParseFloat(valueStr, 64)
-	if err != nil {
-		return 0, fmt.Errorf("valor inválido para Estaduais: %w", err)
-	}
-
-	return estaduaisValue, nil
+	return decimalFromString(valueStr)
 }

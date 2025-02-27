@@ -18,6 +18,7 @@ require (
 	github.com/hibiken/asynq v0.25.1
 	github.com/lib/pq v1.10.9
 	github.com/sakirsensoy/genv v1.0.1
+	github.com/shopspring/decimal v1.4.0
 	golang.org/x/crypto v0.34.0
 	golang.org/x/exp v0.0.0-20250218142911-aa4b98e5adaa
 )

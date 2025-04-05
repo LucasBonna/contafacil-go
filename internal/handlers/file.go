@@ -120,7 +120,7 @@ func HandlerDownloadBatch(deps *app.Dependencies) gin.HandlerFunc {
 			return
 		}
 
-		if len(body.FileIds) == 0 {
+		if len(body.FileIds) <= 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "no valid file ids"})
 			return
 		}

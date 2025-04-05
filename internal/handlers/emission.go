@@ -326,3 +326,124 @@ func (eh *EmissionHandlers) IssueGNREHandler() gin.HandlerFunc {
 		})
 	}
 }
+
+type GnreStatsResponse struct {
+	CurrentMonth struct {
+		TotalEmissions int     `json:"total_emissions"`
+		TotalAmount    float64 `json:"total_amount"`
+		SuccessRate    float64 `json:"success_rate"`
+	} `json:"current_month"`
+	PreviousMonth struct {
+		TotalEmissions int     `json:"total_emissions"`
+		TotalAmount    float64 `json:"total_amount"`
+		SuccessRate    float64 `json:"success_rate"`
+	} `json:"previous_month"`
+	MonthlyComparison struct {
+		EmissionsChange float64 `json:"emissions_change"`
+		AmountChange    float64 `json:"amount_change"`
+		SuccessChange   float64 `json:"success_change"`
+	} `json:"monthly_comparison"`
+}
+
+func (eh *EmissionHandlers) GetGnreStatsHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		clientDetails := utils.GetClientDetails(c)
+		if clientDetails == nil {
+			return
+		}
+		clientID := clientDetails.User.ClientID
+
+		// Get current month's start and end
+		now := time.Now()
+		currentMonthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		currentMonthEnd := currentMonthStart.AddDate(0, 1, 0).Add(-time.Second)
+
+		// Get previous month's start and end
+		previousMonthStart := currentMonthStart.AddDate(0, -1, 0)
+		previousMonthEnd := currentMonthStart.Add(-time.Second)
+
+		// Query current month stats
+		currentMonthQuery := eh.core.DB.Emission.Query().
+			Where(
+				emission.ClientID(clientID),
+				emission.CreatedAtGTE(currentMonthStart),
+				emission.CreatedAtLTE(currentMonthEnd),
+				emission.DeletedAtIsNil(),
+			).
+			WithGnreEmission()
+
+		currentMonthEmissions, err := currentMonthQuery.All(c.Request.Context())
+		if err != nil {
+			log.Printf("Erro ao buscar emissões do mês atual: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro interno ao buscar estatísticas"})
+			return
+		}
+
+		// Query previous month stats
+		previousMonthQuery := eh.core.DB.Emission.Query().
+			Where(
+				emission.ClientID(clientID),
+				emission.CreatedAtGTE(previousMonthStart),
+				emission.CreatedAtLTE(previousMonthEnd),
+				emission.DeletedAtIsNil(),
+			).
+			WithGnreEmission()
+
+		previousMonthEmissions, err := previousMonthQuery.All(c.Request.Context())
+		if err != nil {
+			log.Printf("Erro ao buscar emissões do mês anterior: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro interno ao buscar estatísticas"})
+			return
+		}
+
+		// Calculate current month stats
+		var currentMonthStats GnreStatsResponse
+		currentMonthStats.CurrentMonth.TotalEmissions = len(currentMonthEmissions)
+		currentMonthStats.CurrentMonth.TotalAmount = 0
+		successCount := 0
+
+		for _, e := range currentMonthEmissions {
+			if e.Edges.GnreEmission != nil {
+				currentMonthStats.CurrentMonth.TotalAmount += e.Edges.GnreEmission.GuiaAmount
+			}
+			if e.Status == emission.StatusFINISHED {
+				successCount++
+			}
+		}
+
+		if currentMonthStats.CurrentMonth.TotalEmissions > 0 {
+			currentMonthStats.CurrentMonth.SuccessRate = float64(successCount) / float64(currentMonthStats.CurrentMonth.TotalEmissions) * 100
+		}
+
+		// Calculate previous month stats
+		currentMonthStats.PreviousMonth.TotalEmissions = len(previousMonthEmissions)
+		currentMonthStats.PreviousMonth.TotalAmount = 0
+		successCount = 0
+
+		for _, e := range previousMonthEmissions {
+			if e.Edges.GnreEmission != nil {
+				currentMonthStats.PreviousMonth.TotalAmount += e.Edges.GnreEmission.GuiaAmount
+			}
+			if e.Status == emission.StatusFINISHED {
+				successCount++
+			}
+		}
+
+		if currentMonthStats.PreviousMonth.TotalEmissions > 0 {
+			currentMonthStats.PreviousMonth.SuccessRate = float64(successCount) / float64(currentMonthStats.PreviousMonth.TotalEmissions) * 100
+		}
+
+		// Calculate monthly comparison
+		if currentMonthStats.PreviousMonth.TotalEmissions > 0 {
+			currentMonthStats.MonthlyComparison.EmissionsChange = float64(currentMonthStats.CurrentMonth.TotalEmissions-currentMonthStats.PreviousMonth.TotalEmissions) / float64(currentMonthStats.PreviousMonth.TotalEmissions) * 100
+		}
+		if currentMonthStats.PreviousMonth.TotalAmount > 0 {
+			currentMonthStats.MonthlyComparison.AmountChange = (currentMonthStats.CurrentMonth.TotalAmount - currentMonthStats.PreviousMonth.TotalAmount) / currentMonthStats.PreviousMonth.TotalAmount * 100
+		}
+		if currentMonthStats.PreviousMonth.SuccessRate > 0 {
+			currentMonthStats.MonthlyComparison.SuccessChange = currentMonthStats.CurrentMonth.SuccessRate - currentMonthStats.PreviousMonth.SuccessRate
+		}
+
+		c.JSON(http.StatusOK, currentMonthStats)
+	}
+}

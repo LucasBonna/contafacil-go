@@ -16,5 +16,6 @@ func EmissionRouter(r *gin.Engine, deps *app.Dependencies) {
 			gnre.GET("", emissionHandlers.HandlerListEmissions())
 			gnre.POST("", emissionHandlers.IssueGNREHandler())
 		}
+		emission.GET("/stats", emissionHandlers.GetGnreStatsHandler())
 	}
 }
